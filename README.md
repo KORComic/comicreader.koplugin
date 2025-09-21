@@ -8,11 +8,11 @@ KOReader.
 </div>
 
 <div align="center">
-  <img src="./docs/static/screenshots/page1.png" width="400"/>
-  <img src="./docs/static/screenshots/page2.png" width="400"/>
+  <img src="./docs/screenshots/page1.png" width="400"/>
+  <img src="./docs/screenshots/page2.png" width="400"/>
 </div>
 
-![](./docs/static/screenshots/combined-1-2.png)
+![](./docs/screenshots/combined-1-2.png)
 
 ## Disclaimer
 
@@ -36,5 +36,5 @@ then modified to display two pages at once.
 4. When opening a single-page document, you’ll see a new toggle option:
 
 <div align="center">
-   <img src="./docs/static/screenshots/menu-toggle.png" width="500"/>
+   <img src="./docs/screenshots/menu-toggle.png" width="500"/>
 </div>
