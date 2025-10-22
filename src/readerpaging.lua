@@ -551,6 +551,18 @@ function ReaderPaging:onViewRecalculate(visible_area, page_area)
     end
 end
 
+-- Get the maximum possible base page for dual page mode
+function ReaderPaging:getMaxDualPageBase()
+    local total_pages = self.number_of_pages
+    if self.document_settings.dual_page_mode_first_page_is_cover then
+        -- With cover: spreads are 2-3, 4-5, etc. (even bases)
+        return total_pages % 2 == 0 and total_pages or total_pages - 1
+    else
+        -- Without cover: spreads are 1-2, 3-4, 5-6, etc. (odd bases)
+        return total_pages % 2 == 1 and total_pages or total_pages - 1
+    end
+end
+
 -- Given the current base and the relative page movements,
 -- return the right base for dual page navigation.
 --
@@ -689,12 +701,15 @@ function ReaderPaging:onGotoPageRel(diff)
             end
         elseif self:isDualPageEnabled() then
             logger.dbg("ComicReaderPaging:onGotoPageRel: dual page mode enabled")
-            new_page = self:getPairBaseByRelativeMovement(diff)
+            local max_base = self:getMaxDualPageBase()
 
-            logger.dbg("ComicReaderPaging: relative page pair move to", new_page)
-
-            if self.current_pair_base == new_page and diff > 0 then
+            -- Check if we're at the last spread and trying to move forward
+            if self.current_pair_base >= max_base and diff > 0 then
+                logger.dbg("ComicReaderPaging:onGotoPageRel: at last spread, triggering end of book")
                 new_page = self.number_of_pages + 1 -- to trigger EndOfBook below
+            else
+                new_page = self:getPairBaseByRelativeMovement(diff)
+                logger.dbg("ComicReaderPaging: relative page pair move to", new_page)
             end
         else
             new_page = curr_page + diff
