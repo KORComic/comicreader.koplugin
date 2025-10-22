@@ -1,158 +1,154 @@
 -- Test for readerpaging.lua dual page mode navigation
 -- This tests the fix for "End of Document Action" not working in dual page mode
 
--- Extracted functions from readerpaging.lua for isolated testing
-local function getMaxDualPageBase(total_pages, first_page_is_cover)
-    if first_page_is_cover then
-        -- With cover: spreads are 2-3, 4-5, etc. (even bases)
-        return total_pages % 2 == 0 and total_pages or total_pages - 1
-    else
-        -- Without cover: spreads are 1-2, 3-4, 5-6, etc. (odd bases)
-        return total_pages % 2 == 1 and total_pages or total_pages - 1
+-- Mock KoreReader dependencies
+local mocked_modules = {}
+package.loaded["logger"] = {
+    dbg = function() end,
+}
+
+-- Create a minimal mock for the ReaderPaging base module
+-- We only need the structure that our plugin extends
+mocked_modules["apps/reader/modules/readerpaging"] = {
+    init = function(self)
+        return true
+    end,
+    default_reader_settings = {},
+    default_document_settings = {},
+}
+
+-- Mock other KoreReader modules
+package.loaded["ui/bidi"] = {}
+package.loaded["device"] = { screen = {} }
+package.loaded["ui/event"] = { new = function() end }
+package.loaded["ui/geometry"] = {}
+package.loaded["ui/widget/infomessage"] = {}
+package.loaded["optmath"] = {}
+package.loaded["ui/uimanager"] = {}
+package.loaded["gettext"] = function(x)
+    return x
+end
+package.loaded["ui/widget/buttondialog"] = {}
+package.loaded["ui/widget/notification"] = {}
+
+-- Override require to use mocked modules
+local original_require = require
+local function mock_require(module_name)
+    if mocked_modules[module_name] then
+        return mocked_modules[module_name]
     end
+    return original_require(module_name)
 end
 
-local function getDualPageBaseFromPage(page, first_page_is_cover)
-    if not page or page == 0 then
-        page = 1
-    end
+-- Temporarily replace require
+_G.require = mock_require
 
-    if first_page_is_cover and page == 1 then
-        return 1
-    end
+-- Now import the actual ReaderPaging module
+local ReaderPaging = original_require("src/readerpaging")
 
-    if first_page_is_cover then
-        return (page % 2 == 0) and page or (page - 1)
-    end
-
-    return (page % 2 == 1) and page or (page - 1)
-end
-
-local function getPairBaseByRelativeMovement(current_base, diff, first_page_is_cover, total_pages)
-    if first_page_is_cover and current_base == 1 then
-        -- Handle cover page navigation
-        if diff <= 0 then
-            return 1 -- Stay on cover
-        else
-            -- Jump to first spread (2) + subsequent spreads
-            return math.min(2 + (diff - 1) * 2, total_pages % 2 == 0 and total_pages or total_pages - 1)
-        end
-    end
-
-    -- Calculate new base for spreads
-    local new_base = current_base + (diff * 2)
-
-    -- Clamp to valid range
-    local max_base = total_pages % 2 == 0 and total_pages or total_pages - 1
-    new_base = math.max(1, math.min(new_base, max_base))
-
-    -- Handle backward navigation to cover
-    if new_base < 2 then
-        return total_pages >= 1 and 1 or new_base
-    end
-
-    return new_base
-end
-
-local function getDualPagePairFromBasePage(page, first_page_is_cover, total_pages)
-    local pair_base = getDualPageBaseFromPage(page, first_page_is_cover)
-
-    if first_page_is_cover and pair_base == 1 then
-        return { 1 }
-    end
-
-    -- Create the pair array
-    local pair = { pair_base }
-    if pair_base + 1 <= total_pages then
-        table.insert(pair, pair_base + 1)
-    end
-
-    return pair
-end
+-- Restore original require
+_G.require = original_require
 
 describe("ReaderPaging dual page mode", function()
+    -- Helper function to create a test instance
+    local function create_reader_paging_instance(total_pages, first_page_is_cover)
+        local instance = {}
+        setmetatable(instance, { __index = ReaderPaging })
 
+        instance.number_of_pages = total_pages
+        instance.current_pair_base = 1
+        instance.document_settings = {
+            dual_page_mode_first_page_is_cover = first_page_is_cover or false,
+        }
+
+        return instance
+    end
 
     describe("getMaxDualPageBase", function()
         it("should calculate max base for even pages without cover", function()
-            local max_base = getMaxDualPageBase(10, false)
+            local instance = create_reader_paging_instance(10, false)
+            local max_base = instance:getMaxDualPageBase()
             assert.equals(9, max_base) -- Spreads: 1-2, 3-4, 5-6, 7-8, 9-10
         end)
 
         it("should calculate max base for odd pages without cover", function()
-            local max_base = getMaxDualPageBase(11, false)
+            local instance = create_reader_paging_instance(11, false)
+            local max_base = instance:getMaxDualPageBase()
             assert.equals(11, max_base) -- Spreads: 1-2, 3-4, 5-6, 7-8, 9-10, 11
         end)
 
         it("should calculate max base for even pages with cover", function()
-            local max_base = getMaxDualPageBase(10, true)
+            local instance = create_reader_paging_instance(10, true)
+            local max_base = instance:getMaxDualPageBase()
             assert.equals(10, max_base) -- Cover: 1, Spreads: 2-3, 4-5, 6-7, 8-9, 10
         end)
 
         it("should calculate max base for odd pages with cover", function()
-            local max_base = getMaxDualPageBase(11, true)
+            local instance = create_reader_paging_instance(11, true)
+            local max_base = instance:getMaxDualPageBase()
             assert.equals(10, max_base) -- Cover: 1, Spreads: 2-3, 4-5, 6-7, 8-9, 10-11
         end)
     end)
 
-
     describe("getDualPageBaseFromPage", function()
         it("should return correct base without cover", function()
-            assert.equals(1, getDualPageBaseFromPage(1, false))
-            assert.equals(1, getDualPageBaseFromPage(2, false))
-            assert.equals(3, getDualPageBaseFromPage(3, false))
-            assert.equals(3, getDualPageBaseFromPage(4, false))
-            assert.equals(9, getDualPageBaseFromPage(9, false))
-            assert.equals(9, getDualPageBaseFromPage(10, false))
+            local instance = create_reader_paging_instance(10, false)
+            assert.equals(1, instance:getDualPageBaseFromPage(1))
+            assert.equals(1, instance:getDualPageBaseFromPage(2))
+            assert.equals(3, instance:getDualPageBaseFromPage(3))
+            assert.equals(3, instance:getDualPageBaseFromPage(4))
+            assert.equals(9, instance:getDualPageBaseFromPage(9))
+            assert.equals(9, instance:getDualPageBaseFromPage(10))
         end)
 
         it("should return correct base with cover", function()
-            assert.equals(1, getDualPageBaseFromPage(1, true)) -- Cover alone
-            assert.equals(2, getDualPageBaseFromPage(2, true))
-            assert.equals(2, getDualPageBaseFromPage(3, true))
-            assert.equals(4, getDualPageBaseFromPage(4, true))
-            assert.equals(4, getDualPageBaseFromPage(5, true))
+            local instance = create_reader_paging_instance(10, true)
+            assert.equals(1, instance:getDualPageBaseFromPage(1)) -- Cover alone
+            assert.equals(2, instance:getDualPageBaseFromPage(2))
+            assert.equals(2, instance:getDualPageBaseFromPage(3))
+            assert.equals(4, instance:getDualPageBaseFromPage(4))
+            assert.equals(4, instance:getDualPageBaseFromPage(5))
         end)
     end)
 
     describe("getPairBaseByRelativeMovement", function()
         it("should move forward correctly without cover", function()
-            local current_base = 1
-            assert.equals(3, getPairBaseByRelativeMovement(current_base, 1, false, 10))
+            local instance = create_reader_paging_instance(10, false)
 
-            current_base = 3
-            assert.equals(5, getPairBaseByRelativeMovement(current_base, 1, false, 10))
+            instance.current_pair_base = 1
+            assert.equals(3, instance:getPairBaseByRelativeMovement(1))
+
+            instance.current_pair_base = 3
+            assert.equals(5, instance:getPairBaseByRelativeMovement(1))
         end)
 
         it("should move backward correctly without cover", function()
-            local current_base = 5
-            assert.equals(3, getPairBaseByRelativeMovement(current_base, -1, false, 10))
+            local instance = create_reader_paging_instance(10, false)
 
-            current_base = 3
-            assert.equals(1, getPairBaseByRelativeMovement(current_base, -1, false, 10))
+            instance.current_pair_base = 5
+            assert.equals(3, instance:getPairBaseByRelativeMovement(-1))
+
+            instance.current_pair_base = 3
+            assert.equals(1, instance:getPairBaseByRelativeMovement(-1))
         end)
 
         it("should clamp to max base when trying to go beyond", function()
-            local total_pages = 10
-            local current_base = 9 -- Last spread (9-10)
+            local instance = create_reader_paging_instance(10, false)
+            instance.current_pair_base = 9 -- Last spread (9-10)
             -- Trying to go forward would calculate 11, but should clamp to max
-            local new_base = getPairBaseByRelativeMovement(current_base, 1, false, total_pages)
-            -- In the current implementation, max_base = 10 (bug: doesn't use getMaxDualPageBase)
+            local new_base = instance:getPairBaseByRelativeMovement(1)
             -- So 9 + 2 = 11, clamped to min(11, 10) = 10
             assert.equals(10, new_base)
         end)
     end)
 
-
     describe("end of document detection in dual page mode", function()
         it("should trigger EndOfBook when at last spread moving forward (even pages, no cover)", function()
-            local total_pages = 10
-            local first_page_is_cover = false
-            local current_page = 9
+            local instance = create_reader_paging_instance(10, false)
             local current_pair_base = 9
 
             -- The fix: check if current_pair_base >= max_base and diff > 0
-            local max_base = getMaxDualPageBase(total_pages, first_page_is_cover)
+            local max_base = instance:getMaxDualPageBase()
             local diff = 1
             local should_trigger_end = (current_pair_base >= max_base and diff > 0)
 
@@ -160,12 +156,10 @@ describe("ReaderPaging dual page mode", function()
         end)
 
         it("should trigger EndOfBook when at last spread moving forward (odd pages, no cover)", function()
-            local total_pages = 11
-            local first_page_is_cover = false
-            local current_page = 11
+            local instance = create_reader_paging_instance(11, false)
             local current_pair_base = 11
 
-            local max_base = getMaxDualPageBase(total_pages, first_page_is_cover)
+            local max_base = instance:getMaxDualPageBase()
             local diff = 1
             local should_trigger_end = (current_pair_base >= max_base and diff > 0)
 
@@ -173,25 +167,24 @@ describe("ReaderPaging dual page mode", function()
         end)
 
         it("should trigger EndOfBook when at last spread moving forward (even pages, with cover)", function()
-            local total_pages = 10
-            local first_page_is_cover = true
-            local current_page = 10
+            local instance = create_reader_paging_instance(10, true)
             local current_pair_base = 10
 
-            local max_base = getMaxDualPageBase(total_pages, first_page_is_cover)
+            local max_base = instance:getMaxDualPageBase()
             local diff = 1
             local should_trigger_end = (current_pair_base >= max_base and diff > 0)
 
-            assert.is_true(should_trigger_end, "Should trigger end of book when at base 10 (max) with cover moving forward")
+            assert.is_true(
+                should_trigger_end,
+                "Should trigger end of book when at base 10 (max) with cover moving forward"
+            )
         end)
 
         it("should NOT trigger EndOfBook when not at last spread", function()
-            local total_pages = 10
-            local first_page_is_cover = false
-            local current_page = 7
+            local instance = create_reader_paging_instance(10, false)
             local current_pair_base = 7
 
-            local max_base = getMaxDualPageBase(total_pages, first_page_is_cover)
+            local max_base = instance:getMaxDualPageBase()
             local diff = 1
             local should_trigger_end = (current_pair_base >= max_base and diff > 0)
 
@@ -199,12 +192,10 @@ describe("ReaderPaging dual page mode", function()
         end)
 
         it("should NOT trigger EndOfBook when moving backward from last spread", function()
-            local total_pages = 10
-            local first_page_is_cover = false
-            local current_page = 9
+            local instance = create_reader_paging_instance(10, false)
             local current_pair_base = 9
 
-            local max_base = getMaxDualPageBase(total_pages, first_page_is_cover)
+            local max_base = instance:getMaxDualPageBase()
             local diff = -1
             local should_trigger_end = (current_pair_base >= max_base and diff > 0)
 
@@ -214,35 +205,31 @@ describe("ReaderPaging dual page mode", function()
 
     describe("getDualPagePairFromBasePage", function()
         it("should return single page for cover", function()
-            local total_pages = 10
-            local first_page_is_cover = true
-            local pair = getDualPagePairFromBasePage(1, first_page_is_cover, total_pages)
+            local instance = create_reader_paging_instance(10, true)
+            local pair = instance:getDualPagePairFromBasePage(1)
             assert.equals(1, #pair)
             assert.equals(1, pair[1])
         end)
 
         it("should return pair for normal spreads without cover", function()
-            local total_pages = 10
-            local first_page_is_cover = false
-            local pair = getDualPagePairFromBasePage(3, first_page_is_cover, total_pages)
+            local instance = create_reader_paging_instance(10, false)
+            local pair = instance:getDualPagePairFromBasePage(3)
             assert.equals(2, #pair)
             assert.equals(3, pair[1])
             assert.equals(4, pair[2])
         end)
 
         it("should return pair for normal spreads with cover", function()
-            local total_pages = 10
-            local first_page_is_cover = true
-            local pair = getDualPagePairFromBasePage(2, first_page_is_cover, total_pages)
+            local instance = create_reader_paging_instance(10, true)
+            local pair = instance:getDualPagePairFromBasePage(2)
             assert.equals(2, #pair)
             assert.equals(2, pair[1])
             assert.equals(3, pair[2])
         end)
 
         it("should return single page for last odd page", function()
-            local total_pages = 11
-            local first_page_is_cover = false
-            local pair = getDualPagePairFromBasePage(11, first_page_is_cover, total_pages)
+            local instance = create_reader_paging_instance(11, false)
+            local pair = instance:getDualPagePairFromBasePage(11)
             assert.equals(1, #pair)
             assert.equals(11, pair[1])
         end)
