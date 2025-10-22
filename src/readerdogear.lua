@@ -45,11 +45,20 @@ function ReaderDogear:init()
     self:resetLayout()
 end
 
+--[[
+Creates or recreates the internal dogear widgets (ears) if the size has changed
+or if they are missing. Ensures that the right and left dogear containers are
+properly initialized and assigned, and updates the numeric child slot for
+compatibility with upstream code.
+
+@param new_dogear_size (optional) The desired size for the dogear; if not provided,
+                        uses the maximum configured size.
+]]
 function ReaderDogear:setupDogear(new_dogear_size)
     if not new_dogear_size then
         new_dogear_size = self.dogear_max_size
     end
-    if new_dogear_size ~= self.dogear_size then
+    if new_dogear_size ~= self.dogear_size or not self.right_ear or not self.left_ear then
         self.dogear_size = new_dogear_size
         if self.right_ear then
             self.right_ear:free()
@@ -88,7 +97,26 @@ function ReaderDogear:setupDogear(new_dogear_size)
             dimen = Geom:new({ w = Screen:getWidth(), h = self.dogear_y_offset + self.dogear_size }),
             self.vgroup_left,
         })
+
+        self:_ensureNumericChildCompatibility()
     end
+end
+
+--[[
+Ensure numeric child slot for backward compatibility.
+
+Historically the upstream codebase expects `ReaderDogear` to expose its primary
+container at `self[1]`. This plugin implementation may use named fields such as
+`right_ear` and `left_ear` instead. To remain compatible with upstream callers
+(including subprocesses that index `self.ui.view.dogear[1]`), mirror the
+primary named container onto numeric slot `self[1]`.
+
+This keeps the plugin implementation clean while avoiding crashes caused by
+legacy code paths that rely on `self[1]`.
+]]
+function ReaderDogear:_ensureNumericChildCompatibility()
+    -- Primary slot used by upstream is `self[1]`.
+    self[1] = self.right_ear
 end
 
 function ReaderDogear:paintTo(bb, x, y)
@@ -132,8 +160,14 @@ end
 
 function ReaderDogear:resetLayout()
     -- NOTE: RightContainer aligns to the right of its *own* width...
-    self.right_ear.dimen.w = Screen:getWidth()
-    self.left_ear.dimen.w = Screen:getWidth()
+    if self.right_ear then
+        self.right_ear.dimen.w = Screen:getWidth()
+    end
+    if self.left_ear then
+        self.left_ear.dimen.w = Screen:getWidth()
+    end
+
+    self:_ensureNumericChildCompatibility()
 end
 
 function ReaderDogear:getRefreshRegion()
