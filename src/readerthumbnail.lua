@@ -23,7 +23,7 @@ function ReaderThumbnail:_getPageImage(page)
     end
 
     if disabledDualPageMode then
-        logger.dbg("ReaderThumbnail:_getPageImage - Dual page mode disabled for thumbnail generation")
+        logger.dbg("ComicReaderThumbnail:_getPageImage - Dual page mode disabled for thumbnail generation")
     end
 
     return ReaderThumbnailGetPageImageOrig(self, page)
