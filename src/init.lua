@@ -5,6 +5,7 @@ require("src/readerdogear")
 require("src/readerhighlight")
 require("src/koptoptions")
 require("src/readerzooming")
+require("src/readerthumbnail")
 require("src/reader_menu_order")
 require("src/one_time_migration")
 

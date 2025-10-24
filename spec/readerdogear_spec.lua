@@ -58,7 +58,7 @@ mocked_modules["ui/widget/iconwidget"] = {
 
 -- VerticalGroup mock: accept members, expose resetLayout
 mocked_modules["ui/widget/verticalgroup"] = {
-    new = function(_, ...)
+    new = function(_)
         local obj = { resetLayout = function() end }
         return obj
     end,
