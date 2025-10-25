@@ -45,50 +45,150 @@ function ReaderDogear:init()
     self:resetLayout()
 end
 
+--[[
+Calculates the rotation angle for a dogear icon based on the side and layout.
+
+@param side number ReaderDogear.SIDE_LEFT or ReaderDogear.SIDE_RIGHT
+@return number rotation angle in degrees
+]]
+function ReaderDogear:_getRotationAngle(side)
+    local base_angle = BD.mirroredUILayout() and 90 or 0
+    if side == self.SIDE_LEFT then
+        return base_angle + 90
+    end
+    return base_angle
+end
+
+--[[
+Creates an IconWidget for the dogear with the specified rotation angle.
+
+@param rotation_angle number the rotation angle in degrees
+@return IconWidget the created icon widget
+]]
+function ReaderDogear:_createDogearIcon(rotation_angle)
+    return IconWidget:new({
+        icon = "dogear.alpha",
+        rotation_angle = rotation_angle,
+        width = self.dogear_size,
+        height = self.dogear_size,
+        alpha = true, -- Keep the alpha layer intact
+    })
+end
+
+--[[
+Creates a complete dogear ear (icon + vertical group + container) for one side.
+
+@param side number ReaderDogear.SIDE_LEFT or ReaderDogear.SIDE_RIGHT
+@param icon IconWidget the dogear icon to use
+@return table containing { ear, icon, vgroup } for the specified side
+]]
+function ReaderDogear:_createEar(side, icon)
+    local vgroup = VerticalGroup:new({
+        self.top_pad,
+        icon,
+    })
+
+    local container_class = side == self.SIDE_LEFT and LeftContainer or RightContainer
+    local ear = container_class:new({
+        dimen = Geom:new({ w = Screen:getWidth(), h = self.dogear_y_offset + self.dogear_size }),
+        vgroup,
+    })
+
+    return {
+        ear = ear,
+        icon = icon,
+        vgroup = vgroup,
+    }
+end
+
+--[[
+Updates or creates the right dogear ear if size changed or missing.
+
+@param size_changed boolean whether the dogear size has changed
+]]
+function ReaderDogear:_updateRightEar(size_changed)
+    local right_missing = not self.right_ear
+
+    if size_changed or right_missing then
+        if self.right_ear then
+            self.right_ear:free()
+        end
+
+        local rotation_angle = self:_getRotationAngle(self.SIDE_RIGHT)
+        local icon = self:_createDogearIcon(rotation_angle)
+        local result = self:_createEar(self.SIDE_RIGHT, icon)
+
+        self.icon_right = result.icon
+        self.vgroup_right = result.vgroup
+        self.right_ear = result.ear
+    end
+end
+
+--[[
+Updates or creates the left dogear ear if size changed or missing.
+
+@param size_changed boolean whether the dogear size has changed
+]]
+function ReaderDogear:_updateLeftEar(size_changed)
+    local left_missing = not self.left_ear
+
+    if size_changed or left_missing then
+        if self.left_ear then
+            self.left_ear:free()
+        end
+
+        local rotation_angle = self:_getRotationAngle(self.SIDE_LEFT)
+        local icon = self:_createDogearIcon(rotation_angle)
+        local result = self:_createEar(self.SIDE_LEFT, icon)
+
+        self.icon_left = result.icon
+        self.vgroup_left = result.vgroup
+        self.left_ear = result.ear
+    end
+end
+
+--[[
+Creates or recreates the internal dogear widgets (ears) if the size has changed
+or if they are missing. Ensures that the right and left dogear containers are
+properly initialized and assigned, and updates the numeric child slot for
+compatibility with upstream code.
+
+@param new_dogear_size (optional) The desired size for the dogear; if not provided,
+                        uses the maximum configured size.
+]]
 function ReaderDogear:setupDogear(new_dogear_size)
     if not new_dogear_size then
         new_dogear_size = self.dogear_max_size
     end
-    if new_dogear_size ~= self.dogear_size then
+
+    local size_changed = new_dogear_size ~= self.dogear_size
+
+    if size_changed or not self.right_ear or not self.left_ear then
         self.dogear_size = new_dogear_size
-        if self.right_ear then
-            self.right_ear:free()
-        end
-        if self.left_ear then
-            self.left_ear:free()
-        end
         self.top_pad = VerticalSpan:new({ width = self.dogear_y_offset })
-        self.icon_right = IconWidget:new({
-            icon = "dogear.alpha",
-            rotation_angle = BD.mirroredUILayout() and 90 or 0,
-            width = self.dogear_size,
-            height = self.dogear_size,
-            alpha = true, -- Keep the alpha layer intact
-        })
-        self.vgroup_right = VerticalGroup:new({
-            self.top_pad,
-            self.icon_right,
-        })
-        self.right_ear = RightContainer:new({
-            dimen = Geom:new({ w = Screen:getWidth(), h = self.dogear_y_offset + self.dogear_size }),
-            self.vgroup_right,
-        })
-        self.icon_left = IconWidget:new({
-            icon = "dogear.alpha",
-            rotation_angle = self.icon_right.rotation_angle + 90,
-            width = self.dogear_size,
-            height = self.dogear_size,
-            alpha = true, -- Keep the alpha layer intact
-        })
-        self.vgroup_left = VerticalGroup:new({
-            self.top_pad,
-            self.icon_left,
-        })
-        self.left_ear = LeftContainer:new({
-            dimen = Geom:new({ w = Screen:getWidth(), h = self.dogear_y_offset + self.dogear_size }),
-            self.vgroup_left,
-        })
+
+        self:_updateRightEar(size_changed)
+        self:_updateLeftEar(size_changed)
+
+        self:_ensureNumericChildCompatibility()
     end
+end
+
+--[[
+Ensure numeric child slot for backward compatibility.
+
+Historically the upstream codebase expects `ReaderDogear` to expose its primary
+container at `self[1]`. This plugin implementation may use named fields such as
+`right_ear` and `left_ear` instead. To remain compatible with upstream callers
+(including subprocesses that index `self.ui.view.dogear[1]`), mirror the
+primary named container onto numeric slot `self[1]`.
+
+This keeps the plugin implementation clean while avoiding crashes caused by
+legacy code paths that rely on `self[1]`.
+]]
+function ReaderDogear:_ensureNumericChildCompatibility()
+    -- Primary slot used by upstream is `self[1]`.
+    self[1] = self.right_ear
 end
 
 function ReaderDogear:paintTo(bb, x, y)
@@ -131,9 +231,10 @@ function ReaderDogear:updateDogearOffset()
 end
 
 function ReaderDogear:resetLayout()
-    -- NOTE: RightContainer aligns to the right of its *own* width...
     self.right_ear.dimen.w = Screen:getWidth()
     self.left_ear.dimen.w = Screen:getWidth()
+
+    self:_ensureNumericChildCompatibility()
 end
 
 function ReaderDogear:getRefreshRegion()
