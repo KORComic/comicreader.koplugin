@@ -1,10 +1,10 @@
 {
-    "bump-minor-pre-major": true,
-    "bump-patch-for-minor-pre-major": true,
-    "prerelease": false,
-    "prerelease-type": "beta",
-    "release-type": "simple",
-    "packages": {
-        ".": {}
-    }
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "prerelease": false,
+  "prerelease-type": "beta",
+  "release-type": "simple",
+  "packages": {
+    ".": {}
+  }
 }
