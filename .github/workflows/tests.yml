@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Set up Lua
-        uses: leafo/gh-actions-lua@v11
+        uses: leafo/gh-actions-lua@v12
       - name: Set up LuaRocks
         uses: leafo/gh-actions-luarocks@v5
       - name: Install busted
