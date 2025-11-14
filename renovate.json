@@ -1,8 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "local>OGKevin/renovate-config"
-  ],
+  "extends": ["local>OGKevin/renovate-config"],
   "git-submodules": {
     "enabled": true
   }
