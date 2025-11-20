@@ -19,16 +19,11 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         with:
           submodules: true
-      - name: Create ZIP archive
+      - name: Build plugin package
         if: ${{ steps.release.outputs.release_created }}
-        run: |
-          mkdir -p comicreader.koplugin
-          cp -r src comicreader.koplugin/src
-          cp LICENSE.md version.txt CHANGELOG.md README.md main.lua _meta.lua comicreader.koplugin/
-          cp -r extra-plugins/statistics.koplugin .
-          zip -r comicreader.koplugin.zip comicreader.koplugin statistics.koplugin -i '*.lua'
+        run: ./package.sh
       - name: Upload Release Artifact
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ steps.release.outputs.tag_name }} comicreader.koplugin
+        run: gh release upload ${{ steps.release.outputs.tag_name }} /tmp/comicreader.koplugin.zip
