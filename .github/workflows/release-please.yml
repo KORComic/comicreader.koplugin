@@ -15,7 +15,7 @@ jobs:
         id: release
         with:
           target-branch: ${{ github.ref_name }}
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         if: ${{ steps.release.outputs.release_created }}
         with:
           submodules: true
