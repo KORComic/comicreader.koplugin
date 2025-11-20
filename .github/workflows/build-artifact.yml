@@ -26,8 +26,7 @@ jobs:
             **/*.lua
             src/**
             patches/**
-            _meta.lua
-            main.lua
+
             package.sh
             README.md
             .github/workflows/build-artifact.yml
