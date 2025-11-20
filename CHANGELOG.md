@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.0](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.3...v0.1.0) (2025-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **github-action:** Update actions/checkout action to v6 ([#56](https://github.com/KORComic/comicreader.koplugin/issues/56))
+
+### Continuous Integration
+
+* **github-action:** Update actions/checkout action to v6 ([#56](https://github.com/KORComic/comicreader.koplugin/issues/56)) ([b77eb8b](https://github.com/KORComic/comicreader.koplugin/commit/b77eb8b3979030bf92c43b73afcec8d292c5a21b))
+
 ## [0.0.3](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.2...v0.0.3) (2025-11-14)
 
 ### ⚠ BREAKING CHANGES
