@@ -231,8 +231,13 @@ function ReaderDogear:updateDogearOffset()
 end
 
 function ReaderDogear:resetLayout()
-    self.right_ear.dimen.w = Screen:getWidth()
-    self.left_ear.dimen.w = Screen:getWidth()
+    if self.right_ear then
+        self.right_ear.dimen.w = Screen:getWidth()
+    end
+
+    if self.left_ear then
+        self.left_ear.dimen.w = Screen:getWidth()
+    end
 
     self:_ensureNumericChildCompatibility()
 end
