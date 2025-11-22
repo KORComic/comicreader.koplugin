@@ -9,6 +9,8 @@ local RightContainer = require("ui/widget/container/rightcontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
+local ReaderUI = require("apps/reader/readerui")
+local UIManager = require("ui/uimanager")
 local logger = require("logger")
 
 -- These constants are used to instruct ReaderDogear on which corner to paint the dogear
@@ -18,31 +20,42 @@ ReaderDogear.SIDE_LEFT = 1
 ReaderDogear.SIDE_RIGHT = 2
 ReaderDogear.SIDE_BOTH = 3
 
-function ReaderDogear:init()
+local function patch_reader_dogear(dogearInstance)
+    if not dogearInstance or dogearInstance._comic_patched then
+        return
+    end
+
     -- This image could be scaled for DPI (with scale_for_dpi=true, scale_factor=0.7),
     -- but it's as good to scale it to a fraction (1/32) of the screen size.
     -- For CreDocument, we should additionally take care of not exceeding margins
     -- to not overwrite the book text.
     -- For other documents, there is no easy way to know if valuable content
     -- may be hidden by the icon (kopt's page_margin is quite obscure).
-    self.dogear_min_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) * (1 / 40))
-    self.dogear_max_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) * (1 / 32))
-    self.dogear_size = nil
+    dogearInstance.dogear_min_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) * (1 / 40))
+    dogearInstance.dogear_max_size = math.ceil(math.min(Screen:getWidth(), Screen:getHeight()) * (1 / 32))
+    dogearInstance.dogear_size = nil
 
-    self.icon_right = nil
-    self.icon_left = nil
-    self.vgroup_right = nil
-    self.vgroup_left = nil
-    self.top_pad = nil
+    dogearInstance.icon_right = nil
+    dogearInstance.icon_left = nil
+    dogearInstance.vgroup_right = nil
+    dogearInstance.vgroup_left = nil
+    dogearInstance.top_pad = nil
 
-    self.right_ear = nil
-    self.left_ear = nil
+    dogearInstance.right_ear = nil
+    dogearInstance.left_ear = nil
 
-    self.dogear_y_offset = 0
-    self.dimen = nil
-    self.sides = self.SIDE_RIGHT
-    self:setupDogear()
-    self:resetLayout()
+    dogearInstance.dogear_y_offset = 0
+    dogearInstance.dimen = nil
+    dogearInstance.sides = dogearInstance.SIDE_RIGHT
+    dogearInstance:setupDogear()
+    dogearInstance:resetLayout()
+
+    dogearInstance._comic_patched = true
+    logger.dbg("ComicReaderDogear plugin patch applied")
+end
+
+function ReaderDogear:init()
+    patch_reader_dogear(self)
 end
 
 --[[
@@ -255,5 +268,27 @@ function ReaderDogear:onSetDogearVisibility(visible, sides)
     self.view.dogear_visible = visible
     return true
 end
+
+-- ReaderUI.instance is not set until AFTER init() completes,
+-- so we need to defer checking for an existing dogear instance
+UIManager:nextTick(function()
+    logger.dbg("ComicReaderDogear: Deferred check for existing dogear instance")
+
+    if not (ReaderUI and ReaderUI.instance and ReaderUI.instance.view) then
+        logger.dbg("ComicReaderDogear: No existing dogear instance found (normal startup or fresh ReaderUI)")
+
+        return
+    end
+
+    local existing = ReaderUI.instance.view.dogear
+    if not existing._comic_patched then
+        logger.dbg("ComicReaderDogear: Detected existing dogear instance (startup last-file case)")
+        patch_reader_dogear(existing)
+
+        return
+    end
+
+    logger.dbg("ComicReaderDogear: Existing dogear instance already patched")
+end)
 
 return ReaderDogear
