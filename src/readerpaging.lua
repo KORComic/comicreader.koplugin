@@ -396,7 +396,19 @@ function ReaderPaging:onPanRelease(_, ges)
     end
 end
 
+--- Automatically enables dual page mode when the device is rotated to landscape.
+--
+-- This method may be called during ReaderUI initialization before the plugin's patching
+-- process has completed. Settings (document_settings and reader_settings) can be nil if:
+-- 1. This event fires during ReaderUI:init() before patch_reader_paging() completes
+-- 2. The plugin hasn't been fully loaded yet
+--
+-- The early return guards against nil dereference to prevent crashes during initialization.
 function ReaderPaging:autoEnableDualPageModeIfLandscape()
+    if not self.document_settings or not self.reader_settings then
+        return
+    end
+
     local should_enable = Screen:getScreenMode() == "landscape"
         and not self.document_settings.dual_page_mode
         and self.reader_settings.auto_enable_dual_page_mode
@@ -421,8 +433,18 @@ function ReaderPaging:autoEnableDualPageModeIfLandscape()
     end
 end
 
+--- Automatically disables dual page mode when the device is rotated to portrait.
+--
+-- This method may be called during ReaderUI initialization before the plugin's patching
+-- process has completed. Settings can be nil if this event fires during ReaderUI:init()
+-- before patch_reader_paging() has set document_settings.
+--
+-- The early return guards against nil dereference to prevent crashes during initialization.
 function ReaderPaging:disableDualPageModeIfNotLandscape()
-    -- Disable Dual Page Mode if we're no longer in ladscape
+    if not self.document_settings then
+        return
+    end
+
     if Screen:getScreenMode() ~= "landscape" and self.document_settings.dual_page_mode then
         self:onSetPageMode(1)
 
