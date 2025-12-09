@@ -105,6 +105,19 @@ package.loaded["gettext"] = function(x)
     return x
 end
 
+-- Mock ReaderUI (used in deferred patching logic at module load time)
+mocked_modules["apps/reader/readerui"] = {
+    instance = nil, -- Can be set by tests if needed
+}
+
+-- Mock UIManager (used for nextTick at module load time)
+mocked_modules["ui/uimanager"] = {
+    nextTick = function(callback)
+        -- In tests, we don't execute the callback automatically
+        -- to avoid side effects during module loading
+    end,
+}
+
 -- Override require to resolve our mocked modules first
 local original_require = require
 local mock_require -- Declare at module level so it's accessible to all test suites
@@ -500,6 +513,128 @@ describe("ComicReader ReaderDogear helper functions", function()
             assert.not_equals(original_left, instance.left_ear)
             assert.equals(64, instance.icon_right.dimen.w)
             assert.equals(64, instance.icon_left.dimen.w)
+        end)
+    end)
+end)
+
+-- Regression tests for issue #55: guard against nil ears in resetLayout
+describe("ComicReader ReaderDogear regression tests for issue #55", function()
+    local instance
+
+    before_each(function()
+        instance = {}
+        setmetatable(instance, { __index = ReaderDogearPlugin })
+        if instance.init then
+            instance:init()
+        end
+    end)
+
+    describe("resetLayout with nil ears", function()
+        it("should not crash when right_ear is nil", function()
+            -- Simulate scenario where resetLayout is called before setupDogear
+            instance.right_ear = nil
+            instance.left_ear = nil
+
+            -- This should not crash
+            assert.has_no.errors(function()
+                instance:resetLayout()
+            end)
+        end)
+
+        it("should not crash when only right_ear is nil", function()
+            -- Setup left ear but leave right ear nil
+            instance.dogear_size = 32
+            instance.dogear_y_offset = 0
+            instance.top_pad = mock_require("ui/widget/verticalspan"):new({ width = 0 })
+            instance:_updateLeftEar(false)
+            instance.right_ear = nil
+
+            -- This should not crash
+            assert.has_no.errors(function()
+                instance:resetLayout()
+            end)
+        end)
+
+        it("should not crash when only left_ear is nil", function()
+            -- Setup right ear but leave left ear nil
+            instance.dogear_size = 32
+            instance.dogear_y_offset = 0
+            instance.top_pad = mock_require("ui/widget/verticalspan"):new({ width = 0 })
+            instance:_updateRightEar(false)
+            instance.left_ear = nil
+
+            -- This should not crash
+            assert.has_no.errors(function()
+                instance:resetLayout()
+            end)
+        end)
+
+        it("should handle resetLayout during startup initialization", function()
+            -- Simulate startup scenario where ReaderUI calls resetLayout
+            -- before the dogear is fully initialized
+            local uninit_instance = {}
+            setmetatable(uninit_instance, { __index = ReaderDogearPlugin })
+
+            -- Don't call init or setupDogear - simulating incomplete initialization
+            uninit_instance.right_ear = nil
+            uninit_instance.left_ear = nil
+
+            -- This should not crash even without initialization
+            assert.has_no.errors(function()
+                uninit_instance:resetLayout()
+            end)
+        end)
+    end)
+
+    describe("updateDogearOffset with nil ears", function()
+        before_each(function()
+            -- Mock the ui.rolling property that updateDogearOffset checks
+            instance.ui = { rolling = false }
+        end)
+
+        it("should not crash when ears are nil", function()
+            instance.right_ear = nil
+            instance.left_ear = nil
+            instance.top_pad = nil
+
+            -- This should not crash
+            assert.has_no.errors(function()
+                instance:updateDogearOffset()
+            end)
+        end)
+
+        it("should not crash when only top_pad is initialized", function()
+            instance.right_ear = nil
+            instance.left_ear = nil
+            instance.top_pad = mock_require("ui/widget/verticalspan"):new({ width = 0 })
+
+            -- This should not crash
+            assert.has_no.errors(function()
+                instance:updateDogearOffset()
+            end)
+        end)
+    end)
+
+    describe("getRefreshRegion with initialized ears", function()
+        it("should return combined dimen when ears are initialized", function()
+            -- Setup both ears
+            instance.dogear_size = 32
+            instance.dogear_y_offset = 0
+            instance.top_pad = mock_require("ui/widget/verticalspan"):new({ width = 0 })
+            instance:setupDogear()
+
+            -- Mock the combine method on dimen
+            if instance.icon_right and instance.icon_right.dimen then
+                instance.icon_right.dimen.combine = function(self, other)
+                    return { w = self.w + (other and other.w or 0), h = self.h + (other and other.h or 0) }
+                end
+            end
+
+            -- This should work without errors
+            assert.has_no.errors(function()
+                local region = instance:getRefreshRegion()
+                assert.is_not_nil(region)
+            end)
         end)
     end)
 end)

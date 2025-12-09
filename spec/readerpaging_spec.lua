@@ -22,14 +22,27 @@ package.loaded["ui/bidi"] = {}
 package.loaded["device"] = { screen = {} }
 package.loaded["ui/event"] = { new = function() end }
 package.loaded["ui/geometry"] = {}
-package.loaded["ui/widget/infomessage"] = {}
+package.loaded["ui/widget/infomessage"] = {
+    new = function()
+        return {}
+    end,
+}
 package.loaded["optmath"] = {}
-package.loaded["ui/uimanager"] = {}
+package.loaded["ui/uimanager"] = {
+    show = function() end,
+    nextTick = function() end, -- Used at module load time
+}
 package.loaded["gettext"] = function(x)
     return x
 end
 package.loaded["ui/widget/buttondialog"] = {}
-package.loaded["ui/widget/notification"] = {}
+package.loaded["ui/widget/notification"] = {
+    SOURCE_OTHER = 1,
+    notify = function() end,
+}
+package.loaded["apps/reader/readerui"] = {
+    instance = nil, -- Can be set by tests if needed
+}
 
 -- Override require to use mocked modules
 local original_require = require
@@ -232,6 +245,172 @@ describe("ReaderPaging dual page mode", function()
             local pair = instance:getDualPagePairFromBasePage(11)
             assert.equals(1, #pair)
             assert.equals(11, pair[1])
+        end)
+    end)
+end)
+
+-- Regression tests for issue #55: prevent crashes during initialization
+describe("ReaderPaging initialization edge cases (issue #55)", function()
+    local instance
+
+    before_each(function()
+        -- Update the global Screen mock to support getScreenMode
+        local Device = package.loaded["device"]
+        Device.screen.getScreenMode = function()
+            return "landscape"
+        end
+
+        -- Create a minimal instance
+        instance = {}
+        setmetatable(instance, { __index = ReaderPaging })
+        instance.number_of_pages = 10
+        instance.current_page = 0 -- Simulating uninitialized state
+        instance.view = { page_scroll = false }
+    end)
+
+    describe("autoEnableDualPageModeIfLandscape with nil settings", function()
+        it("should not crash when document_settings is nil", function()
+            instance.document_settings = nil
+            instance.reader_settings = { auto_enable_dual_page_mode = true }
+
+            assert.has_no.errors(function()
+                instance:autoEnableDualPageModeIfLandscape()
+            end)
+        end)
+
+        it("should not crash when reader_settings is nil", function()
+            instance.document_settings = { dual_page_mode = false }
+            instance.reader_settings = nil
+
+            assert.has_no.errors(function()
+                instance:autoEnableDualPageModeIfLandscape()
+            end)
+        end)
+
+        it("should not crash when both settings are nil", function()
+            instance.document_settings = nil
+            instance.reader_settings = nil
+
+            assert.has_no.errors(function()
+                instance:autoEnableDualPageModeIfLandscape()
+            end)
+        end)
+
+        it("should not crash when current_page is 0", function()
+            instance.document_settings = { dual_page_mode = false }
+            instance.reader_settings = { auto_enable_dual_page_mode = true }
+            instance.current_page = 0
+
+            assert.has_no.errors(function()
+                instance:autoEnableDualPageModeIfLandscape()
+            end)
+        end)
+
+        it("should work normally when all settings are initialized", function()
+            instance.document_settings = { dual_page_mode = false }
+            instance.reader_settings = { auto_enable_dual_page_mode = true }
+            instance.current_page = 1
+            instance.onSetPageMode = function() end
+            instance.onRedrawCurrentPage = function() end
+
+            assert.has_no.errors(function()
+                instance:autoEnableDualPageModeIfLandscape()
+            end)
+        end)
+    end)
+
+    describe("disableDualPageModeIfNotLandscape with nil settings", function()
+        before_each(function()
+            -- Update Screen mock to return portrait
+            local Device = package.loaded["device"]
+            Device.screen.getScreenMode = function()
+                return "portrait"
+            end
+        end)
+
+        it("should not crash when document_settings is nil", function()
+            instance.document_settings = nil
+
+            assert.has_no.errors(function()
+                instance:disableDualPageModeIfNotLandscape()
+            end)
+        end)
+
+        it("should not crash when current_page is 0", function()
+            instance.document_settings = { dual_page_mode = true }
+            instance.current_page = 0
+
+            assert.has_no.errors(function()
+                instance:disableDualPageModeIfNotLandscape()
+            end)
+        end)
+
+        it("should work normally when all settings are initialized", function()
+            instance.document_settings = { dual_page_mode = true }
+            instance.current_page = 1
+            instance.onSetPageMode = function() end
+            instance.onRedrawCurrentPage = function() end
+
+            assert.has_no.errors(function()
+                instance:disableDualPageModeIfNotLandscape()
+            end)
+        end)
+    end)
+
+    describe("onSetDimensions during initialization", function()
+        it("should not crash when called before settings are initialized", function()
+            instance.document_settings = nil
+            instance.reader_settings = nil
+            instance.current_page = 0
+
+            assert.has_no.errors(function()
+                instance:onSetDimensions()
+            end)
+        end)
+
+        it("should not crash when called with partial initialization", function()
+            instance.document_settings = { dual_page_mode = false }
+            instance.reader_settings = nil
+            instance.current_page = 0
+
+            assert.has_no.errors(function()
+                instance:onSetDimensions()
+            end)
+        end)
+    end)
+
+    describe("startup scenario simulation", function()
+        it("should handle rotation event before onReadSettings is called", function()
+            -- Simulate the exact scenario from issue #55:
+            -- 1. File opens with rotation set
+            -- 2. onSetDimensions is triggered before onReadSettings
+            local uninit_instance = {}
+            setmetatable(uninit_instance, { __index = ReaderPaging })
+            uninit_instance.number_of_pages = 10
+            uninit_instance.current_page = 0
+            uninit_instance.document_settings = nil
+            uninit_instance.reader_settings = nil
+            uninit_instance.view = { page_scroll = false }
+
+            -- This simulates onSetDimensions being called during ReaderUI:init
+            assert.has_no.errors(function()
+                uninit_instance:onSetDimensions()
+            end)
+
+            -- Now simulate normal initialization completing
+            uninit_instance.document_settings = {
+                dual_page_mode = false,
+                dual_page_mode_first_page_is_cover = false,
+            }
+            uninit_instance.reader_settings = { auto_enable_dual_page_mode = true }
+            uninit_instance.current_page = 1
+            uninit_instance.onSetPageMode = function() end
+            uninit_instance.onRedrawCurrentPage = function() end
+
+            -- After initialization, functionality should work
+            assert.has_no.errors(function()
+                uninit_instance:autoEnableDualPageModeIfLandscape()
+            end)
         end)
     end)
 end)
