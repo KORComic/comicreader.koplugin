@@ -281,14 +281,13 @@ UIManager:nextTick(function()
     end
 
     local existing = ReaderUI.instance.view.dogear
-    if not existing._comic_patched then
-        logger.dbg("ComicReaderDogear: Detected existing dogear instance (startup last-file case)")
-        patch_reader_dogear(existing)
-
+    if not existing or existing._comic_patched then
+        logger.dbg("ComicReaderDogear: Existing dogear instance already patched")
         return
     end
 
-    logger.dbg("ComicReaderDogear: Existing dogear instance already patched")
+    logger.dbg("ComicReaderDogear: Detected existing dogear instance (startup last-file case)")
+    patch_reader_dogear(existing)
 end)
 
 return ReaderDogear
