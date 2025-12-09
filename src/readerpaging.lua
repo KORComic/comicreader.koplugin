@@ -405,7 +405,7 @@ end
 --
 -- The early return guards against nil dereference to prevent crashes during initialization.
 function ReaderPaging:autoEnableDualPageModeIfLandscape()
-    if not self.document_settings or not self.reader_settings then
+    if not self.document_settings or not self.reader_settings or self.current_page == 0 then
         return
     end
 
@@ -441,7 +441,7 @@ end
 --
 -- The early return guards against nil dereference to prevent crashes during initialization.
 function ReaderPaging:disableDualPageModeIfNotLandscape()
-    if not self.document_settings then
+    if not self.document_settings or self.current_page == 0 then
         return
     end
 
