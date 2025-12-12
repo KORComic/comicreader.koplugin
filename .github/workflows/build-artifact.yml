@@ -55,7 +55,7 @@ jobs:
           ls -lh /tmp/comicreader.koplugin.zip
 
       - name: Upload comicreader.koplugin artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: comicreader.koplugin-${{ steps.commit.outputs.branch }}-${{ steps.commit.outputs.sha_short }}
           path: /tmp/comicreader.koplugin.zip
