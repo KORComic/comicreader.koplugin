@@ -6,6 +6,7 @@ local Event = require("ui/event")
 local Geom = require("ui/geometry")
 local InfoMessage = require("ui/widget/infomessage")
 local Math = require("optmath")
+local ReaderUI = require("apps/reader/readerui")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local logger = require("logger")
@@ -30,20 +31,45 @@ ReaderPaging.default_document_settings.dual_page_mode_rtl = false
 
 local ReaderPagingInitOrig = ReaderPaging.init
 
+local function patch_reader_paging(pagingInstance)
+    if not pagingInstance or pagingInstance._comic_patched then
+        return
+    end
+
+    pagingInstance.reader_settings = G_reader_settings:readSetting("paging", ReaderPaging.default_reader_settings)
+    pagingInstance.document_settings =
+        pagingInstance.ui.doc_settings:readSetting("paging", ReaderPaging.default_document_settings)
+
+    local function do_register()
+        -- For existing instances, registerToMainMenu() doesn't work because the menu
+        -- has already been initialized. We need to manually add menu items instead.
+        if pagingInstance.ui and pagingInstance.ui.menu then
+            if type(pagingInstance.addToMainMenu) == "function" then
+                local menu_items = {}
+                pagingInstance:addToMainMenu(menu_items)
+
+                if menu_items.dual_page_options then
+                    pagingInstance.ui.menu.menu_items.dual_page_options = menu_items.dual_page_options
+                    logger.dbg("ComicReaderPaging: Added dual_page_options to existing menu")
+                end
+            end
+        end
+
+        if type(pagingInstance.onDispatcherRegisterActions) == "function" then
+            pagingInstance:onDispatcherRegisterActions()
+        end
+    end
+
+    UIManager:nextTick(do_register)
+
+    pagingInstance._comic_patched = true
+    logger.dbg("ComicReaderPaging plugin patch applied")
+end
+
 function ReaderPaging:init()
     local res = ReaderPagingInitOrig(self)
 
-    self.reader_settings = G_reader_settings:readSetting("paging", ReaderPaging.default_reader_settings)
-    self.document_settings = self.ui.doc_settings:readSetting("paging", ReaderPaging.default_document_settings)
-
-    self.ui:registerPostInitCallback(function()
-        self.ui.menu:registerToMainMenu(self)
-        if self.onDispatcherRegisterActions then
-            self:onDispatcherRegisterActions()
-        end
-    end)
-
-    logger.dbg("ComicReaderPaging plugin patch applied")
+    patch_reader_paging(self)
 
     return res
 end
@@ -370,7 +396,19 @@ function ReaderPaging:onPanRelease(_, ges)
     end
 end
 
+--- Automatically enables dual page mode when the device is rotated to landscape.
+--
+-- This method may be called during ReaderUI initialization before the plugin's patching
+-- process has completed. Settings (document_settings and reader_settings) can be nil if:
+-- 1. This event fires during ReaderUI:init() before patch_reader_paging() completes
+-- 2. The plugin hasn't been fully loaded yet
+--
+-- The early return guards against nil dereference to prevent crashes during initialization.
 function ReaderPaging:autoEnableDualPageModeIfLandscape()
+    if not self.document_settings or not self.reader_settings or self.current_page == 0 then
+        return
+    end
+
     local should_enable = Screen:getScreenMode() == "landscape"
         and not self.document_settings.dual_page_mode
         and self.reader_settings.auto_enable_dual_page_mode
@@ -395,8 +433,18 @@ function ReaderPaging:autoEnableDualPageModeIfLandscape()
     end
 end
 
+--- Automatically disables dual page mode when the device is rotated to portrait.
+--
+-- This method may be called during ReaderUI initialization before the plugin's patching
+-- process has completed. Settings can be nil if this event fires during ReaderUI:init()
+-- before patch_reader_paging() has set document_settings.
+--
+-- The early return guards against nil dereference to prevent crashes during initialization.
 function ReaderPaging:disableDualPageModeIfNotLandscape()
-    -- Disable Dual Page Mode if we're no longer in ladscape
+    if not self.document_settings or self.current_page == 0 then
+        return
+    end
+
     if Screen:getScreenMode() ~= "landscape" and self.document_settings.dual_page_mode then
         self:onSetPageMode(1)
 
@@ -804,6 +852,7 @@ function ReaderPaging:onGotoPageRel(diff)
 
     return true
 end
+
 --When page scroll is enabled, we need to disable Dual Page mode
 --@param page_scroll bool if page_scroll is on or not
 function ReaderPaging:onSetScrollMode(page_scroll)
@@ -1027,5 +1076,28 @@ function ReaderPaging:requestPageFromUserInDualPageModeAndExec(callback)
 
     UIManager:show(button_dialog, "full")
 end
+
+-- ReaderUI.instance is not set until AFTER init() completes,
+-- so we need to defer checking for an existing paging instance
+UIManager:nextTick(function()
+    logger.dbg("ComicReaderPaging: Deferred check for existing paging instance")
+
+    if not (ReaderUI and ReaderUI.instance and ReaderUI.instance.paging) then
+        logger.dbg("ComicReaderPaging: No existing paging instance found (normal startup or fresh ReaderUI)")
+
+        return
+    end
+
+    local existing = ReaderUI.instance.paging
+
+    if existing._comic_patched then
+        logger.dbg("ComicReaderPaging: Existing paging instance already patched")
+
+        return
+    end
+
+    logger.dbg("ComicReaderPaging: Detected existing paging instance (startup last-file case)")
+    patch_reader_paging(existing)
+end)
 
 return ReaderPaging
