@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.4](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.3...v0.0.4) (2025-12-15)
+
+
+### Bug Fixes
+
+* guard against nils and patch ReaderUI ([d103821](https://github.com/KORComic/comicreader.koplugin/commit/d1038211a740608ddc52f0db60325d283ca7e3af))
+* guard against nils during init ([#58](https://github.com/KORComic/comicreader.koplugin/issues/58)) ([d103821](https://github.com/KORComic/comicreader.koplugin/commit/d1038211a740608ddc52f0db60325d283ca7e3af))
+
 ## [0.0.3](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.2...v0.0.3) (2025-11-14)
 
 ### ⚠ BREAKING CHANGES
