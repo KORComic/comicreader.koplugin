@@ -6,5 +6,11 @@
   "release-type": "simple",
   "packages": {
     ".": {}
-  }
+  },
+  "extra-files": [
+    {
+      "type": "generic",
+      "path": "_meta.lua"
+    }
+  ]
 }
