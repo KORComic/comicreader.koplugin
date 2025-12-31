@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.4...v0.0.5) (2025-12-31)
+
+
+### Bug Fixes
+
+* add version field ([#73](https://github.com/KORComic/comicreader.koplugin/issues/73)) ([b798ef0](https://github.com/KORComic/comicreader.koplugin/commit/b798ef05a681b26bfbd7418fb008e4a6317a42dc)), closes [#72](https://github.com/KORComic/comicreader.koplugin/issues/72)
+
 ## [0.0.4](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.3...v0.0.4) (2025-12-15)
 
 ### Bug Fixes
