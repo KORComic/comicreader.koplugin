@@ -40,7 +40,22 @@ function ReaderView:addWidgets()
     self[3] = self.flipping
 end
 
+-- Save the original paintTo before overriding
+-- This allows user patches (like header/footer patches) to work on non-paging documents
+local _original_paintTo = ReaderView.paintTo
+
+--- Override paintTo to handle paging documents differently
+--- ComicReader only needs to override paintTo for paging documents (PDFs, CBZs, etc.)
+--- For non-paging documents (EPUBs, reflowable text), use the original implementation
+--- This allows user patches (like header/footer patches) to work properly
+--- @param bb Blitbuffer
+--- @param x number
+--- @param y number
 function ReaderView:paintTo(bb, x, y)
+    if not self.ui.paging then
+        return _original_paintTo(self, bb, x, y)
+    end
+
     logger.dbg("ComicReaderView:paintTo", self.visible_area, "to", x, y)
     if self.page_scroll then
         self:drawPageBackground(bb, x, y)
@@ -49,29 +64,13 @@ function ReaderView:paintTo(bb, x, y)
     end
 
     -- draw page content
-    if self.ui.paging then
-        if self.page_scroll then
-            self:drawScrollPages(bb, x, y)
-        elseif self.ui.paging:isDualPageEnabled() then
-            self:drawPageBackground(bb, x, y)
-            self:draw2Pages(bb, x, y)
-        else
-            self:drawSinglePage(bb, x, y)
-        end
+    if self.page_scroll then
+        self:drawScrollPages(bb, x, y)
+    elseif self.ui.paging:isDualPageEnabled() then
+        self:drawPageBackground(bb, x, y)
+        self:draw2Pages(bb, x, y)
     else
-        if self.view_mode == "page" then
-            self:drawPageView(bb, x, y)
-        elseif self.view_mode == "scroll" then
-            self:drawScrollView(bb, x, y)
-        end
-        local should_repaint = self.ui.rolling:handlePartialRerendering()
-        if should_repaint then
-            -- ReaderRolling may have repositionned on another page containing
-            -- the xpointer of the top of the original page: recalling this is
-            -- all there is to do.
-            self:paintTo(bb, x, y)
-            return
-        end
+        self:drawSinglePage(bb, x, y)
     end
 
     -- mark last read area of overlapped pages
@@ -129,31 +128,9 @@ function ReaderView:paintTo(bb, x, y)
     -- Most pages should not require dithering, but the dithering flag is also used to engage Kaleido waveform modes,
     -- so we'll set the flag to true if any of our drawn highlights were in color.
     self.dialog.dithered = colorful
-    -- For KOpt, let the user choose.
-    if self.ui.paging then
-        if self.document.hw_dithering then
-            self.dialog.dithered = true
-        end
-    else
-        -- Whereas for CRe,
-        -- If we're attempting to show a large enough amount of image data,
-        -- request dithering (without triggering another repaint ;)).
-        local img_count, img_coverage = self.document:getDrawnImagesStatistics()
-        -- We also want to deal with paging *away* from image content, which would have adverse effect on ghosting.
-        local coverage_diff = math.abs(img_coverage - self.img_coverage)
-        -- Which is why we remember the stats of the *previous* page.
-        self.img_count, self.img_coverage = img_count, img_coverage
-        if img_coverage >= 0.075 or coverage_diff >= 0.075 then
-            -- Request dithering on the actual page with image content
-            if img_coverage >= 0.075 then
-                self.dialog.dithered = true
-            end
-            -- Request a flashing update while we're at it, but only if it's the first time we're painting it
-            if self.state.drawn == false and G_reader_settings:nilOrTrue("refresh_on_pages_with_images") then
-                UIManager:setDirty(nil, "full")
-            end
-        end
-        self.state.drawn = true
+    -- For KOpt (paging documents), let the user choose.
+    if self.document.hw_dithering then
+        self.dialog.dithered = true
     end
 end
 
