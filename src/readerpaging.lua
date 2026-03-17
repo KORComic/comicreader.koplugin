@@ -210,6 +210,11 @@ function ReaderPaging:genDualPagingMenu()
     }
 end
 
+-- Checks if a given page is a spread (wider than it is tall).
+-- Results are cached to improve performance.
+--
+-- @param page number
+-- @return boolean
 function ReaderPaging:isPageSpread(page)
     if not page or page < 1 or page > self.number_of_pages then
         return false
@@ -232,6 +237,8 @@ end
 
 -- Given the page number, calculate what the correct base page would be for
 -- dual page mode.
+-- If spread detection is enabled, it dynamically calculates the base page
+-- by checking the dimensions of preceding pages.
 --
 -- @param page number
 --
@@ -287,8 +294,14 @@ function ReaderPaging:getDualPageBaseFromPage(page)
     return base
 end
 
--- Returns the page pair for dual page mode for the given base
+-- Returns the page pair for dual page mode for the given base.
+-- If the base page is a spread (and spread detection is enabled),
+-- it returns an array containing only the base page.
+--
+-- @param page number The base page
 -- @param ordered boolean if the caller needs the page number in displaying order from LTR
+--
+-- @return table Array of page numbers
 function ReaderPaging:getDualPagePairFromBasePage(page, ordered)
     local pair_base = self:getDualPageBaseFromPage(page)
     ordered = ordered and ordered or false
@@ -683,7 +696,10 @@ function ReaderPaging:onViewRecalculate(visible_area, page_area)
     end
 end
 
--- Get the maximum possible base page for dual page mode
+-- Get the maximum possible base page for dual page mode.
+-- If spread detection is enabled, this dynamically evaluates the max base.
+--
+-- @return number
 function ReaderPaging:getMaxDualPageBase()
     if self.document_settings.dual_page_mode_detect_spreads then
         return self:getDualPageBaseFromPage(self.number_of_pages)
@@ -714,9 +730,16 @@ end
 -- - 3,4
 -- etc
 --
+-- If self.document_settings.dual_page_mode_detect_spreads is enabled,
+-- it iterates forward or backward through the pages, accounting for single pages and spreads
+-- to find the correct base page.
+--
 -- So if we are at base 1, and make a relative move +1, return 2
 -- which will make readerview render page 2,3
 --
+-- @param diff number
+--
+-- @return number
 function ReaderPaging:getPairBaseByRelativeMovement(diff)
     logger.dbg("ReaderPaging:getPairBaseByRelativeMovement:", diff)
     local total_pages = self.number_of_pages
