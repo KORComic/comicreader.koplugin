@@ -75,6 +75,8 @@ function ReaderPaging:init()
 end
 
 function ReaderPaging:onReadSettings(config)
+    self._landscape_cache = {}
+    self._base_cache = {}
     self.document_settings = config:readSetting("paging", self.default_document_settings)
     self.page_positions = config:readSetting("page_positions") or {}
 
@@ -199,22 +201,68 @@ end
 -- @param page number
 --
 -- @return number
+function ReaderPaging:isLandscapePage(page)
+    if not page or page < 1 or page > self.number_of_pages then
+        return false
+    end
+    if not self._landscape_cache then
+        self._landscape_cache = {}
+    end
+    if self._landscape_cache[page] ~= nil then
+        return self._landscape_cache[page]
+    end
+    local dimen = self.ui.document:getNativePageDimensions(page)
+    local is_landscape = dimen and dimen.w > dimen.h
+    self._landscape_cache[page] = is_landscape
+    return is_landscape
+end
+
 function ReaderPaging:getDualPageBaseFromPage(page)
     logger.dbg("ComicReaderPaging.getDualPageBaseFromPage: calculating base for page", page)
 
-    if not page or page == 0 then
-        page = 1
+    if not page or page <= 1 then
+        return 1
     end
 
     if self.document_settings.dual_page_mode_first_page_is_cover and page == 1 then
         return 1
     end
 
-    if self.document_settings.dual_page_mode_first_page_is_cover then
-        return (page % 2 == 0) and page or (page - 1)
+    if self:isLandscapePage(page) then
+        return page
     end
 
-    return (page % 2 == 1) and page or (page - 1)
+    if not self._base_cache then
+        self._base_cache = {}
+    end
+    if self._base_cache[page] then
+        return self._base_cache[page]
+    end
+
+    local prev_base = self:getDualPageBaseFromPage(page - 1)
+    local pair = self:_getPairFromBase(prev_base)
+    local last_in_pair = pair[#pair]
+
+    local base = (last_in_pair == page - 1) and page or prev_base
+    self._base_cache[page] = base
+    return base
+end
+
+-- Build the raw pair for a given base without ordering.
+function ReaderPaging:_getPairFromBase(base)
+    if self.document_settings.dual_page_mode_first_page_is_cover and base == 1 then
+        return { 1 }
+    end
+
+    local pair = { base }
+    if self:isLandscapePage(base) then
+        return pair
+    end
+    if base + 1 <= self.number_of_pages and not self:isLandscapePage(base + 1) then
+        table.insert(pair, base + 1)
+    end
+
+    return pair
 end
 
 -- Returns the page pair for dual page mode for the given base
@@ -225,15 +273,7 @@ function ReaderPaging:getDualPagePairFromBasePage(page, ordered)
 
     logger.dbg("ComicReaderPaging.getDualPagePairFromBasePage: got base for pair", pair_base)
 
-    if self.document_settings.dual_page_mode_first_page_is_cover and pair_base == 1 then
-        return { 1 }
-    end
-
-    -- Create the pair array
-    local pair = { pair_base }
-    if pair_base + 1 <= self.number_of_pages then
-        table.insert(pair, pair_base + 1)
-    end
+    local pair = self:_getPairFromBase(pair_base)
 
     if not ordered then
         return pair
@@ -528,6 +568,7 @@ end
 
 function ReaderPaging:onSetDualPageModeFirstPageIsCover(bool)
     self.document_settings.dual_page_mode_first_page_is_cover = bool
+    self._base_cache = nil
 end
 
 function ReaderPaging:onSetDualPageModeRTL(bool)
@@ -601,59 +642,33 @@ end
 
 -- Get the maximum possible base page for dual page mode
 function ReaderPaging:getMaxDualPageBase()
-    local total_pages = self.number_of_pages
-    if self.document_settings.dual_page_mode_first_page_is_cover then
-        -- With cover: spreads are 2-3, 4-5, etc. (even bases)
-        return total_pages % 2 == 0 and total_pages or total_pages - 1
-    else
-        -- Without cover: spreads are 1-2, 3-4, 5-6, etc. (odd bases)
-        return total_pages % 2 == 1 and total_pages or total_pages - 1
-    end
+    return self:getDualPageBaseFromPage(self.number_of_pages)
 end
 
 -- Given the current base and the relative page movements,
 -- return the right base for dual page navigation.
---
--- If self.document_settings.dual_page_mode_first_page_is_cover is enabled, then we start counting pairs
--- from page 2 onwards.
--- So if we are at page 1, the next pairs are:
--- - 2,3
--- - 4,5
--- etc
---
--- If it's disabled, then it becomes:
--- - 1,2
--- - 3,4
--- etc
---
--- So if we are at base 1, and make a relative move +1, return 2
--- which will make readerview render page 2,3
---
 function ReaderPaging:getPairBaseByRelativeMovement(diff)
     logger.dbg("ReaderPaging:getPairBaseByRelativeMovement:", diff)
     local total_pages = self.number_of_pages
     local current_base = self.current_pair_base
 
-    if self.document_settings.dual_page_mode_first_page_is_cover and current_base == 1 then
-        -- Handle cover page navigation
-        if diff <= 0 then
-            return 1 -- Stay on cover
+    local new_base = current_base
+    local direction = diff > 0 and 1 or -1
+
+    for _ = 1, math.abs(diff) do
+        if direction > 0 then
+            local pair = self:_getPairFromBase(new_base)
+            local next_base = pair[#pair] + 1
+            if next_base > total_pages then
+                return self:getDualPageBaseFromPage(total_pages)
+            end
+            new_base = next_base
         else
-            -- Jump to first spread (2) + subsequent spreads
-            return math.min(2 + (diff - 1) * 2, total_pages % 2 == 0 and total_pages or total_pages - 1)
+            if new_base <= 1 then
+                return 1
+            end
+            new_base = self:getDualPageBaseFromPage(new_base - 1)
         end
-    end
-
-    -- Calculate new base for spreads
-    local new_base = current_base + (diff * 2)
-
-    -- Clamp to valid range
-    local max_base = total_pages % 2 == 0 and total_pages or total_pages - 1
-    new_base = math.max(1, math.min(new_base, max_base))
-
-    -- Handle backward navigation to cover
-    if new_base < 2 then
-        return total_pages >= 1 and 1 or new_base
     end
 
     return new_base
@@ -935,6 +950,14 @@ function ReaderPaging:calculateZoomFactorForPagePair(pair)
     local max_width = visible_area.w
     local zooms = {}
 
+    -- Single-page spread (landscape page): fit to full visible area
+    if #pair == 1 then
+        local dimen = self.ui.document:getNativePageDimensions(pair[1])
+        local zoom_h = max_height / dimen.h
+        local zoom_w = max_width / dimen.w
+        return { math.min(zoom_h, zoom_w) }
+    end
+
     local total_width = 0
     local height_zooms = {}
     for i, page in ipairs(pair) do
@@ -1033,6 +1056,11 @@ function ReaderPaging:requestPageFromUserInDualPageModeAndExec(callback)
         return
     end
     local page_pair = self:getDualPagePairFromBasePage(self.current_pair_base)
+    -- Landscape spread shown as a single panel
+    if #page_pair == 1 then
+        callback(self.current_page)
+        return
+    end
     logger.dbg("ReaderPaging:requestPageFromUserInDualPageModeAndExec() page pair", page_pair)
     local button_dialog
     local buttons = {
