@@ -243,7 +243,7 @@ function ReaderView:draw2Pages(bb, x, y)
         local zoom = states[i].zoom
         local area = visible_area:copy()
 
-        self.document:drawPage(bb, x_offset, y_offset, area, page, zoom, self.state.rotation, self.state.gamma)
+        self.document:drawPage(bb, x_offset, y_offset, area, page, zoom, self.state.rotation, self.state.gamma, self.state.saturation)
 
         x_offset = x_offset + states[i].dimen.w
     end
