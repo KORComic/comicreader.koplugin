@@ -1,7 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>OGKevin/renovate-config"],
+  "extends": [
+    "local>OGKevin/renovate-config",
+    "customManagers:githubActionsVersions"
+  ],
   "git-submodules": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "description": "CI Lua stays on 5.4 until luacheck supports 5.5",
+      "matchDatasources": ["github-tags"],
+      "matchPackageNames": ["lua/lua"],
+      "allowedVersions": "/^5\\.4\\./"
+    }
+  ]
 }
