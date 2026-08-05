@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: StyLua Check
-        uses: JohnnyMorganz/stylua-action@v4
+        uses: JohnnyMorganz/stylua-action@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
