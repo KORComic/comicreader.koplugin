@@ -17,6 +17,7 @@ The following actions are available:
 - Set Page Mode
 - Set Dual Page Mode: First Page is Cover
 - Set Dual Page Mode: RTL
+- Set Dual Page Mode: Detect Spreads
 
 ![](./img/dispatcher.png)
 
@@ -41,6 +42,10 @@ This action lets you **mark** whether the **first page is a cover** or not.
 ### Set Dual Page Mode: RTL
 
 Use this to **enable or disable RTL** (Right-to-Left) reading in dual page mode.
+
+### Set Dual Page Mode: Detect Spreads
+
+This action lets you **enable or disable spread detection**, where single pages that are wider than they are tall are treated as a 2-page spread and displayed on their own.
 
 ## Usage Examples
 

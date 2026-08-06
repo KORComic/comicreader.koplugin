@@ -28,6 +28,7 @@ ReaderPaging.default_reader_settings.auto_enable_dual_page_mode = false
 ReaderPaging.default_document_settings.dual_page_mode = false
 ReaderPaging.default_document_settings.dual_page_mode_first_page_is_cover = false
 ReaderPaging.default_document_settings.dual_page_mode_rtl = false
+ReaderPaging.default_document_settings.dual_page_mode_detect_spreads = false
 
 local ReaderPagingInitOrig = ReaderPaging.init
 
@@ -175,6 +176,22 @@ function ReaderPaging:genDualPagingMenu()
             ),
         },
         {
+            text = _("Detect Spreads"),
+            checked_func = function()
+                return self.document_settings.dual_page_mode_detect_spreads
+            end,
+            callback = function()
+                self.document_settings.dual_page_mode_detect_spreads = not self.document_settings.dual_page_mode_detect_spreads
+                if self:isDualPageEnabled() then
+                    self:onRedrawCurrentPage()
+                end
+            end,
+            enabled_func = function()
+                return self:isDualPageEnabled()
+            end,
+            help_text = _([[When enabled, single pages that are wider than they are tall will be treated as a 2-page spread and displayed on their own.]]),
+        },
+        {
             text = _("Auto Enable"),
             checked_func = function()
                 return self.reader_settings.auto_enable_dual_page_mode
@@ -193,8 +210,35 @@ function ReaderPaging:genDualPagingMenu()
     }
 end
 
+-- Checks if a given page is a spread (wider than it is tall).
+-- Results are cached to improve performance.
+--
+-- @param page number
+-- @return boolean
+function ReaderPaging:isPageSpread(page)
+    if not page or page < 1 or page > self.number_of_pages then
+        return false
+    end
+    
+    self._spread_cache = self._spread_cache or {}
+    if self._spread_cache[page] ~= nil then
+        return self._spread_cache[page]
+    end
+
+    local is_spread = false
+    local dimen = self.ui.document:getNativePageDimensions(page)
+    if dimen and dimen.w and dimen.h then
+        is_spread = dimen.w > dimen.h
+    end
+    
+    self._spread_cache[page] = is_spread
+    return is_spread
+end
+
 -- Given the page number, calculate what the correct base page would be for
 -- dual page mode.
+-- If spread detection is enabled, it dynamically calculates the base page
+-- by checking the dimensions of preceding pages.
 --
 -- @param page number
 --
@@ -206,19 +250,58 @@ function ReaderPaging:getDualPageBaseFromPage(page)
         page = 1
     end
 
-    if self.document_settings.dual_page_mode_first_page_is_cover and page == 1 then
-        return 1
+    if not self.document_settings.dual_page_mode_detect_spreads then
+        if self.document_settings.dual_page_mode_first_page_is_cover and page == 1 then
+            return 1
+        end
+
+        if self.document_settings.dual_page_mode_first_page_is_cover then
+            return (page % 2 == 0) and page or (page - 1)
+        end
+
+        return (page % 2 == 1) and page or (page - 1)
     end
 
+    -- Spread detection dynamic mapping logic
+    local base = 1
+    local p = 1
+    
     if self.document_settings.dual_page_mode_first_page_is_cover then
-        return (page % 2 == 0) and page or (page - 1)
+        if page == 1 then return 1 end
+        p = 2
+        base = 2
     end
-
-    return (page % 2 == 1) and page or (page - 1)
+    
+    while p <= page do
+        if self:isPageSpread(p) then
+            if p == page then return base end
+            p = p + 1
+            base = p
+        else
+            if p == page then return base end
+            
+            if p + 1 <= self.number_of_pages and self:isPageSpread(p + 1) then
+                p = p + 1
+                base = p
+            else
+                if p + 1 == page then return base end
+                p = p + 2
+                base = p
+            end
+        end
+    end
+    
+    return base
 end
 
--- Returns the page pair for dual page mode for the given base
+-- Returns the page pair for dual page mode for the given base.
+-- If the base page is a spread (and spread detection is enabled),
+-- it returns an array containing only the base page.
+--
+-- @param page number The base page
 -- @param ordered boolean if the caller needs the page number in displaying order from LTR
+--
+-- @return table Array of page numbers
 function ReaderPaging:getDualPagePairFromBasePage(page, ordered)
     local pair_base = self:getDualPageBaseFromPage(page)
     ordered = ordered and ordered or false
@@ -227,6 +310,16 @@ function ReaderPaging:getDualPagePairFromBasePage(page, ordered)
 
     if self.document_settings.dual_page_mode_first_page_is_cover and pair_base == 1 then
         return { 1 }
+    end
+
+    if self.document_settings.dual_page_mode_detect_spreads then
+        if self:isPageSpread(pair_base) then
+            return { pair_base }
+        end
+        
+        if pair_base + 1 <= self.number_of_pages and self:isPageSpread(pair_base + 1) then
+            return { pair_base }
+        end
     end
 
     -- Create the pair array
@@ -534,6 +627,10 @@ function ReaderPaging:onSetDualPageModeRTL(bool)
     self.document_settings.dual_page_mode_rtl = bool
 end
 
+function ReaderPaging:onSetDualPageModeDetectSpreads(bool)
+    self.document_settings.dual_page_mode_detect_spreads = bool
+end
+
 -- @param mode number 1 = single, 2 = dual
 function ReaderPaging:onSetPageMode(mode)
     logger.dbg(
@@ -599,8 +696,15 @@ function ReaderPaging:onViewRecalculate(visible_area, page_area)
     end
 end
 
--- Get the maximum possible base page for dual page mode
+-- Get the maximum possible base page for dual page mode.
+-- If spread detection is enabled, this dynamically evaluates the max base.
+--
+-- @return number
 function ReaderPaging:getMaxDualPageBase()
+    if self.document_settings.dual_page_mode_detect_spreads then
+        return self:getDualPageBaseFromPage(self.number_of_pages)
+    end
+
     local total_pages = self.number_of_pages
     if self.document_settings.dual_page_mode_first_page_is_cover then
         -- With cover: spreads are 2-3, 4-5, etc. (even bases)
@@ -626,13 +730,44 @@ end
 -- - 3,4
 -- etc
 --
+-- If self.document_settings.dual_page_mode_detect_spreads is enabled,
+-- it iterates forward or backward through the pages, accounting for single pages and spreads
+-- to find the correct base page.
+--
 -- So if we are at base 1, and make a relative move +1, return 2
 -- which will make readerview render page 2,3
 --
+-- @param diff number
+--
+-- @return number
 function ReaderPaging:getPairBaseByRelativeMovement(diff)
     logger.dbg("ReaderPaging:getPairBaseByRelativeMovement:", diff)
     local total_pages = self.number_of_pages
     local current_base = self.current_pair_base
+
+    if self.document_settings.dual_page_mode_detect_spreads then
+        if diff == 0 then return current_base end
+        
+        local new_base = current_base
+        if diff > 0 then
+            for _ = 1, diff do
+                local pair = self:getDualPagePairFromBasePage(new_base)
+                local next_page = pair[#pair] + 1
+                if next_page > total_pages then break end
+                new_base = self:getDualPageBaseFromPage(next_page)
+            end
+        else
+            for _ = 1, -diff do
+                local prev_page = new_base - 1
+                if prev_page < 1 then
+                    new_base = 1
+                    break
+                end
+                new_base = self:getDualPageBaseFromPage(prev_page)
+            end
+        end
+        return new_base
+    end
 
     if self.document_settings.dual_page_mode_first_page_is_cover and current_base == 1 then
         -- Handle cover page navigation
