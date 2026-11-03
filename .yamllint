@@ -1,4 +1,7 @@
 extends: default
+ignore: |
+  .devenv/
+  .pre-commit-config.yaml
 rules:
   document-start:
     present: false
