@@ -1,4 +1,5 @@
 exclude_files = {
+    ".devenv/**",
     ".luarocks/**",
     "extra-plugins/**",
     "spec/**",
