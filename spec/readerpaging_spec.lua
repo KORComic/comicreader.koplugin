@@ -148,10 +148,35 @@ describe("ReaderPaging dual page mode", function()
         it("should clamp to max base when trying to go beyond", function()
             local instance = create_reader_paging_instance(10, false)
             instance.current_pair_base = 9 -- Last spread (9-10)
-            -- Trying to go forward would calculate 11, but should clamp to max
+            -- 9 + 2 = 11 is beyond the last spread, so stay at base 9.
+            -- A base of 10 would render a single page that is already part of 9-10.
             local new_base = instance:getPairBaseByRelativeMovement(1)
-            -- So 9 + 2 = 11, clamped to min(11, 10) = 10
-            assert.equals(10, new_base)
+            assert.equals(9, new_base)
+        end)
+
+        it("should reach the last page when page count is odd without cover", function()
+            local instance = create_reader_paging_instance(11, false)
+            instance.current_pair_base = 9
+            assert.equals(11, instance:getPairBaseByRelativeMovement(1))
+        end)
+
+        it("should always return a valid spread base across page counts and directions", function()
+            for total = 1, 20 do
+                for _, cover in ipairs({ false, true }) do
+                    local instance = create_reader_paging_instance(total, cover)
+                    local max_base = math.max(1, instance:getMaxDualPageBase())
+                    for base = 1, total do
+                        if instance:getDualPageBaseFromPage(base) == base then
+                            for diff = -3, 3 do
+                                instance.current_pair_base = base
+                                local new_base = instance:getPairBaseByRelativeMovement(diff)
+                                assert.is_true(new_base >= 1 and new_base <= max_base)
+                                assert.equals(new_base, instance:getDualPageBaseFromPage(new_base))
+                            end
+                        end
+                    end
+                end
+            end
         end)
     end)
 

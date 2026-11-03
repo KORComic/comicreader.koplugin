@@ -633,6 +633,7 @@ function ReaderPaging:getPairBaseByRelativeMovement(diff)
     logger.dbg("ReaderPaging:getPairBaseByRelativeMovement:", diff)
     local total_pages = self.number_of_pages
     local current_base = self.current_pair_base
+    local max_base = math.max(1, self:getMaxDualPageBase())
 
     if self.document_settings.dual_page_mode_first_page_is_cover and current_base == 1 then
         -- Handle cover page navigation
@@ -640,7 +641,7 @@ function ReaderPaging:getPairBaseByRelativeMovement(diff)
             return 1 -- Stay on cover
         else
             -- Jump to first spread (2) + subsequent spreads
-            return math.min(2 + (diff - 1) * 2, total_pages % 2 == 0 and total_pages or total_pages - 1)
+            return math.min(2 + (diff - 1) * 2, max_base)
         end
     end
 
@@ -648,7 +649,6 @@ function ReaderPaging:getPairBaseByRelativeMovement(diff)
     local new_base = current_base + (diff * 2)
 
     -- Clamp to valid range
-    local max_base = total_pages % 2 == 0 and total_pages or total_pages - 1
     new_base = math.max(1, math.min(new_base, max_base))
 
     -- Handle backward navigation to cover
