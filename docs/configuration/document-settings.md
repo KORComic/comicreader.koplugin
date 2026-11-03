@@ -39,6 +39,10 @@ Some documents start with a cover page that should be shown on its own.
 
 Use this setting to match the layout you prefer.
 
+### Detect Spreads
+
+When enabled, single pages that are wider than they are tall will be treated as a 2-page spread and displayed on their own. This dynamically detects spreads across your document, preventing image splitting while reading in dual page mode.
+
 ## Automatic Enablement
 
 **Auto Enable**

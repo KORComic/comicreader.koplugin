@@ -29,15 +29,6 @@ function ComicReader:onDispatcherRegisterActions(self)
         args = { true, false },
         toggle = { _("true"), _("false") },
     })
-    Dispatcher:registerAction("paging_set_auto_enable_dual_page_mode", {
-        category = "string",
-        event = "SetAutoEnableDualPageMode",
-        title = _("Set auto enable dual page mode"),
-        section = "paging",
-        paging = true,
-        args = { true, false },
-        toggle = { _("true"), _("false") },
-    })
     Dispatcher:registerAction("paging_toggle_dual_page_mode", {
         category = "none",
         event = "ToggleDualPageMode",
@@ -72,6 +63,15 @@ function ComicReader:onDispatcherRegisterActions(self)
         args = { true, false },
         toggle = { _("true"), _("false") },
         separator = true,
+    })
+    Dispatcher:registerAction("paging_set_dual_page_mode_detect_spreads", {
+        category = "string",
+        event = "SetDualPageModeDetectSpreads",
+        title = _("Set dual page mode detect spreads"),
+        section = "paging",
+        paging = true,
+        args = { true, false },
+        toggle = { _("true"), _("false") },
     })
 end
 
