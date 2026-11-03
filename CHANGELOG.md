@@ -2,16 +2,14 @@
 
 ## [0.0.8](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.7...v0.0.8) (2026-11-03)
 
-
 ### Features
 
-* allow user patches on non-paging documents in paintTo ([#71](https://github.com/KORComic/comicreader.koplugin/issues/71)) ([3fa6c72](https://github.com/KORComic/comicreader.koplugin/commit/3fa6c726be03662774f872df1eb0759f6507d5b1))
-
+- allow user patches on non-paging documents in paintTo ([#71](https://github.com/KORComic/comicreader.koplugin/issues/71)) ([3fa6c72](https://github.com/KORComic/comicreader.koplugin/commit/3fa6c726be03662774f872df1eb0759f6507d5b1))
 
 ### Bug Fixes
 
-* **deps:** update lua/lua to 5.4.9 ([#96](https://github.com/KORComic/comicreader.koplugin/issues/96)) ([21eda13](https://github.com/KORComic/comicreader.koplugin/commit/21eda13972e6300d5f7d2f6dc54b06dd090da5ca))
-* **paging:** clamp to last dual-page spread ([#101](https://github.com/KORComic/comicreader.koplugin/issues/101)) ([3082bb0](https://github.com/KORComic/comicreader.koplugin/commit/3082bb0aeaa341cbd7b7171ce9d6b96902919619))
+- **deps:** update lua/lua to 5.4.9 ([#96](https://github.com/KORComic/comicreader.koplugin/issues/96)) ([21eda13](https://github.com/KORComic/comicreader.koplugin/commit/21eda13972e6300d5f7d2f6dc54b06dd090da5ca))
+- **paging:** clamp to last dual-page spread ([#101](https://github.com/KORComic/comicreader.koplugin/issues/101)) ([3082bb0](https://github.com/KORComic/comicreader.koplugin/commit/3082bb0aeaa341cbd7b7171ce9d6b96902919619))
 
 ## [0.0.7](https://github.com/KORComic/comicreader.koplugin/compare/v0.0.6...v0.0.7) (2026-08-06)
 
